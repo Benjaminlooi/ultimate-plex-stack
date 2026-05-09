@@ -1,0 +1,5 @@
+{
+  "AllowFunnel": {
+    "${TS_CERT_DOMAIN}:32400": true
+  }
+}

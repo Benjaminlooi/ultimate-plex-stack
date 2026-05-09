@@ -1,0 +1,170 @@
+name: plex-stack
+
+services:
+  #Plex - used to display the media
+  #This can also be replaced by Emby/Jellyfin if you so choose
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    network_mode: host
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+      - VERSION=docker
+      # - PLEX_CLAIM=${PLEX_CLAIM}
+    ports:
+      - 32400:32400
+    devices:
+     - /dev/dri:/dev/dri #Required for plex HW transcoding / QuickSync (Intel 8th gen or newer)
+    volumes:
+      - ${BASE_PATH}/plex/config:/config
+      - ${MEDIA_SHARE}/media/tv:/tv
+      - ${MEDIA_SHARE}/media/movies:/movies
+    restart: unless-stopped
+    
+  #Radarr - used to find movies automatically
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/radarr/config:/config
+      - ${MEDIA_SHARE}:/share #Access to the entire share
+    ports:
+      - 7878:7878
+    restart: unless-stopped
+    
+  #Sonarr - used to find tv shows automatically
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/sonarr/config:/config
+      - ${MEDIA_SHARE}:/share #Access to the entire share
+    ports:
+      - 8989:8989
+    restart: unless-stopped
+  
+  #Prowlarr - manages your Sonarr, Radarr and download client
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/prowlarr/config:/config
+    ports:
+      - 9696:9696
+    restart: unless-stopped
+
+  #Overseer - allows users to request media on their own
+  overseerr:
+    image: lscr.io/linuxserver/overseerr:latest
+    container_name: overseerr
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/overseer/config:/config
+      - ${MEDIA_SHARE}:/share #Access to the entire share
+    ports:
+      - 5055:5055
+    restart: unless-stopped
+      
+  #Qbittorrent - torrenting software
+  #You can also use RuTorrent, Transmisson or Deluge
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+      - WEBUI_PORT=8089
+      - TORRENTING_PORT=8694 #Make sure to port forward this port in your router so you can seed more effectively
+    volumes:
+      - ${BASE_PATH}/qbittorrent/config:/config
+      - ${MEDIA_SHARE}:/share
+    restart: unless-stopped
+    ports:
+      - 8089:8089
+
+  #Tautulli - for plex statistics. Very useful when troubleshooting performance issues
+  tautulli:
+    image: lscr.io/linuxserver/tautulli:latest
+    container_name: tautulli
+    environment:
+      - PUID=${PUID}
+      - PGID=${GUID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/tautulli:/config
+    ports:
+      - 8181:8181
+    restart: unless-stopped
+      
+  flaresolverr:
+    # DockerHub mirror flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    environment:
+      - LOG_LEVEL=info
+      - LOG_HTML=false
+      - CAPTCHA_SOLVER=none
+      - TZ=${TZ}
+    ports:
+      - 8191:8191
+    restart: unless-stopped
+
+#   plex-tailscale:
+#     image: tailscale/tailscale:latest
+#     env_file:
+#       - .env
+#     environment:
+#       TS_HOSTNAME: plex # Enter the hostname for your tailnet
+#       TS_AUTH_KEY: ${TAILSCALE_AUTH_KEY} # OAuth client key recommended
+#       TS_EXTRA_ARGS: --advertise-tags=tag:plex # Tags are required when using OAuth client
+#       TS_SERVE_CONFIG: /config/funnel.json
+#       TS_STATE_DIR: tailscale_plex # To not make a new machine in tailnet {machine-name}-1 docker compose restarts
+#     init: true
+#     restart: unless-stopped
+#     devices:
+#       - /dev/net/tun:/dev/net/tun
+#     volumes:
+#       - ./config:/config
+#       - type: volume
+#         source: tailscale_plex
+#         target: /var/lib/tailscale
+#       - type: volume
+#         source: tailscale_sock_plex
+#         target: /tmp # Mounting the entire /tmp folder to access tailscale.sock
+#     cap_add:
+#       - NET_ADMIN
+#     networks:
+#       - plex-network
+
+# volumes:
+#   tailscale_plex:
+#     name: tailscale_plex
+#   tailscale_sock_plex:
+#     name: tailscale_sock_plex
+      
+# networks:
+#   plex-network:
+#     name: plex-network
+#     driver: bridge
+#     enable_ipv6: false
+#     driver_opts:
+#       com.docker.network.driver.mtu: "9001" # Jumbo Frame
+#       com.docker.network.bridge.host_binding_ipv4: "127.0.0.1" # Harden aio
